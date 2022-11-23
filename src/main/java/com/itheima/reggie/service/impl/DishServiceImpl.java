@@ -11,6 +11,9 @@ import com.itheima.reggie.service.DishFlavorService;
 import com.itheima.reggie.service.DishService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +28,8 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
     @Autowired
     private DishFlavorService dishFlavorService;
     @Autowired
-    private RedisTemplate redisTemplate;
+    private CacheManager cacheManager;
+    @CacheEvict(value="dishCache")
     public void addNewDish(DishDto dishDto){
         this.save(dishDto);
         Long dishId= dishDto.getId();
@@ -33,10 +37,11 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         flavors=flavors.stream().map((i)->{i.setDishId(dishId);return i;}).collect(Collectors.toList());
         dishFlavorService.saveBatch(flavors);
         //clear the redis data when save new dish
-        String key="dish_"+dishDto.getCategoryId()+"_"+dishDto.getStatus();
-        redisTemplate.delete(key);
+        //String key="dish_"+dishDto.getCategoryId()+"_"+dishDto.getStatus();
+        //redisTemplate.delete(key);
     }
 
+    @CacheEvict(value="dishCache")
     public void updateDish(DishDto dishDto) {
         //保存基本信息
         this.updateById(dishDto);
@@ -52,8 +57,8 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         }).collect(Collectors.toList());
         dishFlavorService.saveBatch(flavors);
         //clear the redis data when save new dish
-        String key="dish_"+dishDto.getCategoryId()+"_"+dishDto.getStatus();
-        redisTemplate.delete(key);
+        //String key="dish_"+dishDto.getCategoryId()+"_"+dishDto.getStatus();
+        //redisTemplate.delete(key);
     }
 
     public DishDto getByIdWithFlavor(Long id){
@@ -70,16 +75,17 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         return dishDto;
     }
 
+    @Cacheable(value="dishCache",key="'dish_'+#dish.categoryId+#dish.status")
     public List<DishDto> getDishList(Dish dish) {
         List<DishDto> dishList=null;
         //get cache data from redis
         //build key of each category: 1 category has 1 key: use its categoryId and status to build the key
-        String key="dish_"+dish.getCategoryId()+"_"+dish.getStatus(); //key: dish_1234567_1
-        dishList= (List<DishDto>) redisTemplate.opsForValue().get(key);
+        //String key="dish_"+dish.getCategoryId()+"_"+dish.getStatus(); //key: dish_1234567_1
+        //dishList= (List<DishDto>) redisTemplate.opsForValue().get(key);
         //if there is related data, return, no need to get data from mysql database
-        if(dishList!=null){
-            return dishList;
-        }
+        //if(dishList!=null){
+        //    return dishList;
+        //}
         //if there is not, get data from mysql database and save into redis
         //用lqw查到符合categoryId的Dish集合
         LambdaQueryWrapper<Dish> lambdaQueryWrapper=new LambdaQueryWrapper<>();
@@ -96,7 +102,7 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
             dishDto.setFlavors(flavors);
             return dishDto;
         }).collect(Collectors.toList());
-        redisTemplate.opsForValue().set(key,dishList);
+        //redisTemplate.opsForValue().set(key,dishList);
         return dishList;
     }
 }

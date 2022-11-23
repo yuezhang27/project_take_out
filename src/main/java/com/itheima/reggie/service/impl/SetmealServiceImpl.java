@@ -14,6 +14,9 @@ import com.itheima.reggie.service.SetmealDishService;
 import com.itheima.reggie.service.SetmealService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +29,9 @@ import java.util.stream.Collectors;
 public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> implements SetmealService {
     @Autowired
     private SetmealDishService setmealDishService;
+    @Autowired
+    private CacheManager cacheManager;
+    @CacheEvict(value="setmealCache",allEntries = true)
     public void saveWithSetmealDishes(SetmealDto setmealDto) {
         //保存不含菜品的普通套餐信息
         this.save(setmealDto);
@@ -37,7 +43,7 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
         }).collect(Collectors.toList());
         setmealDishService.saveBatch(setmealDishList);
     }
-
+    @CacheEvict(value="setmealCache",allEntries = true)
     public void deleteSetmealWithDishes(List<Long> ids) {
         //查询每一个id对应status情况
         for (Long id: ids) {
@@ -51,7 +57,6 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
             setmealDishService.remove(lambdaQueryWrapper);
         }
     }
-
     public void changeStatus(List<Long> ids,Integer status) {
         LambdaQueryWrapper<Setmeal> lambdaQueryWrapper=new LambdaQueryWrapper<>();
         Integer oldStatus=(status!=0)?0:1;
@@ -63,7 +68,6 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
         }).collect(Collectors.toList());
         this.updateBatchById(list);
     }
-
     public SetmealDto getSetmealWithDishes(Long id) {
         //从setmeal数据表获得基本信息
         //用setmeal表中的setmealId获得setmeal中dish,将这些dish封装进listsetmealDishes
@@ -77,6 +81,7 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
         return setmealDto;
     }
 
+    @CacheEvict(value="setmealCache",allEntries = true)
     public void updateWithSetmealDishes(SetmealDto setmealDto) {
         this.updateById(setmealDto);
         Long id= setmealDto.getId();
@@ -91,6 +96,7 @@ public class SetmealServiceImpl extends ServiceImpl<SetmealMapper, Setmeal> impl
         setmealDishService.saveBatch(setmealDishes);
     }
 
+    @Cacheable(value="setmealCache",key="#setmeal.categoryId+'_'+#setmeal.status")
     public List<SetmealDto> getSetmealListWithDishes(Setmeal setmeal) {
         LambdaQueryWrapper<Setmeal> lambdaQueryWrapper=new LambdaQueryWrapper<>();
         lambdaQueryWrapper.eq(setmeal.getCategoryId()!=null,Setmeal::getCategoryId,setmeal.getCategoryId());
