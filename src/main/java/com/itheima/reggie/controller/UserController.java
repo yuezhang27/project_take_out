@@ -8,6 +8,7 @@ import com.itheima.reggie.utils.ValidateCodeUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpSession;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/user")
@@ -22,6 +24,8 @@ import java.util.Map;
 public class UserController {
     @Autowired
     private UserService userService;
+    @Autowired
+    private RedisTemplate redisTemplate;
     @PostMapping("/sendMsg")
     public Result<String> sendMsg(@RequestBody User user, HttpSession session){
         //接受传来的phone
@@ -30,9 +34,10 @@ public class UserController {
             //调用验证码生成工具类生成验证码
             String code= ValidateCodeUtils.generateValidateCode(4).toString();
             log.info("code={}",code);
-            //调用API方法发送验证码,skip this part need a business registration
-            //把验证码存入session中
-            session.setAttribute(phone,code);
+            //调用API方法发送验证码,skip this part: LACK a valid business registration
+            //把验证码存入redis中
+            //session.setAttribute(phone,code);
+            redisTemplate.opsForValue().set(phone,code,300l, TimeUnit.SECONDS);
             return Result.success("send code");
         }
         return Result.error("could not send code");
@@ -43,7 +48,8 @@ public class UserController {
         String phone=map.get("phone").toString();
         String code=map.get("code").toString();
         //在session中获取code，若对应前端表单post过来的map里的code，则登录成功
-        Object realCode=session.getAttribute(phone);
+        //Object realCode=session.getAttribute(phone);
+        Object realCode=redisTemplate.opsForValue().get(phone);
         if(realCode!=null&&code.equals(realCode)){
             //判断phone在user表中是否存在，，若不存在，save一个user数据
             LambdaQueryWrapper<User> lambdaQueryWrapper=new LambdaQueryWrapper<>();
@@ -57,6 +63,8 @@ public class UserController {
             }
             //完成登录，在session中存入user和其id便于后续登录验证
             session.setAttribute("user",user.getId());
+            //successfully login,therefore delete verification code
+            redisTemplate.delete(phone);
             return Result.success(user);
         }
         //否则map不上，返回错误结果
