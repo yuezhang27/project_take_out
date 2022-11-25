@@ -106,7 +106,7 @@ public class EmployeeController {
         //Long updateId=(Long) request.getSession().getAttribute("employee");
         //employee.setUpdateTime(LocalDateTime.now());
         //employee.setUpdateUser(updateId);
-        employeeService.save(employee);
+        employeeService.updateById(employee);
         return Result.success("successfully updates");
     }
     @GetMapping("/{id}")
